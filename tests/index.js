@@ -233,6 +233,47 @@ const tests = [
     var umd = require("../umd/index.js");
     umd.genSalt().then(done);
   },
+
+  // ===== INVALID ROUNDS VALIDATION =====
+
+  function invalidRoundsNaNProducesWeakHash(done) {
+    // Demonstrates the vulnerability: without validation, NaN rounds
+    // produces a hash with "NaN" in the rounds field and only 1 bcrypt
+    // iteration (1 << NaN = 1), making it trivially crackable.
+    var malformedSalt = "$2b$xx$" + ".".repeat(22);
+    var hash = bcrypt.hashSync("password", malformedSalt);
+    // The hash contains "NaN" proving parseInt produced NaN
+    assert(!hash.includes("$NaN$"), "Expected hash to NOT contain $NaN$");
+    done();
+  },
+
+  function invalidRoundsNaN(done) {
+    // Non-numeric round values like "xx" must be rejected to prevent
+    // from crafting salts that bypass bcrypt's work factor.
+    // Without this check, parseInt returns NaN which reduces rounds to 1.
+    var malformedSalt = "$2b$xx$" + ".".repeat(22);
+    assert.throws(() => bcrypt.hashSync("password", malformedSalt), /Invalid/);
+    done();
+  },
+
+  function invalidRoundsNaNAsync(done) {
+    // Async version: malformed rounds must error via callback, not
+    // silently produce a weak hash that's trivially crackable.
+    var malformedSalt = "$2b$xx$" + ".".repeat(22);
+    bcrypt.hash("password", malformedSalt, function (err) {
+      assert(err);
+      assert(/Invalid/.test(err.message));
+      done();
+    });
+  },
+
+  function invalidRoundsPartialNaN(done) {
+    // Even partial non-numeric rounds (e.g., "1x") must be rejected.
+    // parseInt("1") * 10 + parseInt("x") = 10 + NaN = NaN
+    var malformedSalt = "$2b$1x$" + ".".repeat(22);
+    assert.throws(() => bcrypt.hashSync("password", malformedSalt), /Invalid/);
+    done();
+  },
 ];
 
 function next() {
