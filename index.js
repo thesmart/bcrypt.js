@@ -1075,9 +1075,17 @@ function _hash(password, salt, callback, progressCallback) {
       return;
     } else throw err;
   }
-  var r1 = parseInt(salt.substring(offset, offset + 1), 10) * 10,
-    r2 = parseInt(salt.substring(offset + 1, offset + 2), 10),
-    rounds = r1 + r2,
+  // Validate rounds format before parsing
+  var roundsStr = salt.substring(offset, offset + 2);
+  if (!/^\d{2}$/.test(roundsStr)) {
+    err = Error("Invalid rounds: " + roundsStr);
+    if (callback) {
+      nextTick(callback.bind(this, err));
+      return;
+    } else throw err;
+  }
+
+  var rounds = parseInt(roundsStr, 10),
     real_salt = salt.substring(offset + 3, offset + 25);
   password += minor >= "a" ? "\x00" : "";
 

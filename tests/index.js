@@ -237,13 +237,11 @@ const tests = [
   // ===== INVALID ROUNDS VALIDATION =====
 
   function invalidRoundsNaNProducesWeakHash(done) {
-    // Demonstrates the vulnerability: without validation, NaN rounds
+    // Demonstrates vulnerability fix: without validation, NaN rounds
     // produces a hash with "NaN" in the rounds field and only 1 bcrypt
     // iteration (1 << NaN = 1), making it trivially crackable.
     var malformedSalt = "$2b$xx$" + ".".repeat(22);
-    var hash = bcrypt.hashSync("password", malformedSalt);
-    // The hash contains "NaN" proving parseInt produced NaN
-    assert(!hash.includes("$NaN$"), "Expected hash to NOT contain $NaN$");
+    assert.throws(() => bcrypt.hashSync("password", malformedSalt), /Invalid/);
     done();
   },
 
@@ -272,6 +270,39 @@ const tests = [
     // parseInt("1") * 10 + parseInt("x") = 10 + NaN = NaN
     var malformedSalt = "$2b$1x$" + ".".repeat(22);
     assert.throws(() => bcrypt.hashSync("password", malformedSalt), /Invalid/);
+    done();
+  },
+
+  function validRoundsLeadingZero(done) {
+    // Zero-padded rounds like "04" must be accepted.
+    // bcrypt uses 2-digit zero-padded rounds (04-31).
+    var salt = bcrypt.genSaltSync(4);
+    assert(salt.startsWith("$2b$04$"), "Expected salt to start with $2b$04$");
+    var hash = bcrypt.hashSync("password", salt);
+    assert(hash.startsWith("$2b$04$"), "Expected hash to start with $2b$04$");
+    assert(bcrypt.compareSync("password", hash));
+    done();
+  },
+
+  function invalidRoundsZero(done) {
+    // Rounds "00" is syntactically valid but outside allowed range (4-31).
+    // Must be rejected to prevent weak hashes.
+    var zeroRoundsSalt = "$2b$00$" + ".".repeat(22);
+    assert.throws(
+      () => bcrypt.hashSync("password", zeroRoundsSalt),
+      /Illegal number of rounds/,
+    );
+    done();
+  },
+
+  function invalidRounds32(done) {
+    // Rounds "00" is syntactically valid but outside allowed range (4-31).
+    // Must be rejected to prevent weak hashes.
+    var zeroRoundsSalt = "$2b$32$" + ".".repeat(22);
+    assert.throws(
+      () => bcrypt.hashSync("password", zeroRoundsSalt),
+      /Illegal number of rounds/,
+    );
     done();
   },
 ];
